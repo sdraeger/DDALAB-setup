@@ -1,8 +1,5 @@
 services:
   web:
-    build:
-      context: .
-      dockerfile: ./packages/web/Dockerfile
     image: sdraeger1/ddalab-web:${VERSION:-latest}
     platform: linux/amd64
     env_file:
@@ -26,9 +23,6 @@ services:
       - "traefik.enable=true"
 
   api:
-    build:
-      context: .
-      dockerfile: ./packages/api/Dockerfile
     image: sdraeger1/ddalab-api-server:${VERSION:-latest}
     platform: linux/amd64
     healthcheck:
