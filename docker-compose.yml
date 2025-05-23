@@ -1,6 +1,10 @@
 services:
   web:
+    build:
+      context: .
+      dockerfile: ./packages/web/Dockerfile
     image: sdraeger1/ddalab-web:${VERSION:-latest}
+    platform: linux/amd64
     env_file:
       - ./.env
     volumes:
@@ -22,6 +26,9 @@ services:
       - "traefik.enable=true"
 
   api:
+    build:
+      context: .
+      dockerfile: ./packages/api/Dockerfile
     image: sdraeger1/ddalab-api-server:${VERSION:-latest}
     platform: linux/amd64
     healthcheck:
@@ -41,7 +48,6 @@ services:
       PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
     volumes:
       - prometheus_metrics:/tmp/prometheus
-      - ${DDALAB_ALLOWED_DIRS}
     depends_on:
       postgres:
         condition: service_healthy
@@ -99,6 +105,12 @@ services:
       - "443:443"
     environment:
       - TRAEFIK_PASSWORD_HASH=${TRAEFIK_PASSWORD_HASH}
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     volumes:
       - ./certs:/etc/traefik/certs:ro
       - ./traefik.yml:/etc/traefik/traefik.yml:ro
@@ -121,14 +133,14 @@ services:
       - "traefik.enable=true"
 
   jaeger:
-    image: jaegertracing/all-in-one:latest
+    image: jaegertracing/jaeger:2.0.0
     ports:
-      - "6831:6831/udp"
-      - "16686:16686"
-      - "14268:14268"
-      - "14250:14250"
+      - "4317:4317" # OTLP gRPC receiver
+      - "4318:4318" # OTLP HTTP receiver
+      - "16686:16686" # Jaeger UI
+      - "14268:14268" # Legacy HTTP collector
     environment:
-      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+      - COLLECTOR_OTLP_ENABLED=true
     networks:
       - internal
 
