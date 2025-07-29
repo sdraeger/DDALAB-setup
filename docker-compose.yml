@@ -1,15 +1,36 @@
 services:
+  redis:
+    image: redis:7.4.1-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - internal
+    restart: unless-stopped
+
   web:
-    image: sdraeger1/ddalab-web:${VERSION:-latest}
+    # Use Docker Hub image if DDALAB_USE_DOCKER_HUB=true, otherwise build locally
+    image: ${DDALAB_WEB_IMAGE:-sdraeger1/ddalab-web:${VERSION:-latest}}
+    build:
+      context: .
+      dockerfile: ./packages/web/Dockerfile
     platform: linux/amd64
     env_file:
       - ./.env
+    environment:
+      # Next.js Environment Variables
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8001}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      NODE_ENV: production
+      # Session Configuration
+      SESSION_EXPIRATION: ${SESSION_EXPIRATION:-10080}
     volumes:
       - type: bind
         source: ./.env
         target: /app/.env
-    expose:
-      - "3000"
+    ports:
+      - "${WEB_PORT:-3000}:3000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000"]
       interval: 5s
@@ -21,9 +42,14 @@ services:
       - internal
     labels:
       - "traefik.enable=true"
+    restart: unless-stopped
 
   api:
-    image: sdraeger1/ddalab-api-server:${VERSION:-latest}
+    # Use Docker Hub image if DDALAB_API_IMAGE is set, otherwise build locally
+    image: ${DDALAB_API_IMAGE:-sdraeger1/ddalab-api:${VERSION:-latest}}
+    build:
+      context: .
+      dockerfile: ./packages/api/Dockerfile
     platform: linux/amd64
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/api/health"]
@@ -31,6 +57,7 @@ services:
       timeout: 3s
       retries: 5
     expose:
+      - "8001"
       - "8002"
     env_file:
       - ./.env
@@ -40,17 +67,27 @@ services:
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       DDALAB_ALLOWED_DIRS: ${DDALAB_ALLOWED_DIRS}
       PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
+      DDALAB_REDIS_HOST: redis
+      DDALAB_REDIS_PORT: 6379
+      DDALAB_REDIS_DB: 0
+      DDALAB_REDIS_PASSWORD: ${DDALAB_REDIS_PASSWORD:-}
+      DDALAB_REDIS_USE_SSL: ${DDALAB_REDIS_USE_SSL:-False}
+      DDALAB_PLOT_CACHE_TTL: ${DDALAB_PLOT_CACHE_TTL:-3600}
     volumes:
       - prometheus_metrics:/tmp/prometheus
+      - ${DDALAB_DATA_DIR:-./data}:/app/data:rw
     depends_on:
       postgres:
         condition: service_healthy
       minio:
         condition: service_started
+      redis:
+        condition: service_started
     networks:
       - internal
     labels:
       - "traefik.enable=true"
+    restart: unless-stopped
 
   minio:
     image: minio/minio:RELEASE.2025-03-12T18-04-18Z
@@ -65,6 +102,7 @@ services:
       - minio-data:/data
     networks:
       - internal
+    restart: unless-stopped
 
   postgres:
     image: postgres:16
@@ -91,6 +129,7 @@ services:
       - "5432:5432"
     networks:
       - internal
+    restart: unless-stopped
 
   traefik:
     image: traefik:v3.3.5
@@ -172,6 +211,7 @@ volumes:
   grafana_data:
   postgres-data:
   minio-data:
+  redis-data:
 
 networks:
   internal:

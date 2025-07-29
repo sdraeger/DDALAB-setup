@@ -1,16 +1,8 @@
-# DDALAB Setup
+# DDALAB - Delay Differential Analysis Laboratory
 
-This repository contains the configuration files needed to set up and run the DDALAB (Delay Differential Analysis Laboratory) application using Docker and Traefik. Instead of containing the actual application code, this repository provides the necessary infrastructure configuration to easily deploy your own instance of DDALAB.
-
-## Overview
-
-The setup includes:
-
-- Traefik as a reverse proxy with SSL support
-- Docker Compose configuration for service orchestration
-- Prometheus monitoring setup
-- Automatic SSL certificate management
-- Secure configuration templates
+DDALAB is an application for performing Delay Differential Analysis (DDA) on EDF and ASCII files, consisting of a web-based GUI client and a FastAPI backend server with Celery for task management.
+The application is designed to be run on a local machine, but can be deployed to a remote server with the appropriate configuration. In the local case, the data does not leave the local machine. Additionally, the
+traffic within the virtualized network is encrypted via SSL.
 
 ## Prerequisites
 
@@ -25,7 +17,7 @@ The setup includes:
 2. **For Windows**:
 
    - Download [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop)
-   - Run the installer and follow the prompts
+   - Run the ConfigManager and follow the prompts
    - Start Docker Desktop from the Start menu
 
 3. **For Linux (Ubuntu/Debian)**:
@@ -42,182 +34,175 @@ Verify installation:
 
 ```bash
 docker --version
-docker compose --version
-```
-
-## Repository Structure
-
-```
-├── docker-compose.yml    # Main service orchestration configuration
-├── traefik.yml          # Traefik reverse proxy configuration
-├── prometheus.yml       # Prometheus monitoring configuration
-├── dynamic/            # Dynamic Traefik configuration
-│   └── routers.yml     # Service routing rules
-├── certs/              # Directory for SSL certificates
-├── traefik-logs/       # Traefik access logs
-├── acme.json           # Let's Encrypt certificate storage
-├── up.sh              # Startup script
-└── cleanup.sh         # Cleanup script
+docker-compose --version
 ```
 
 ## Getting Started
 
-1. **Clone this Repository**:
+### Option 1: Quick Docker Deployment (Recommended)
+
+For the easiest setup, use our automated deployment script:
+
+```bash
+# Clone the repository
+git clone https://github.com/sdraeger/DDALAB.git
+cd DDALAB
+
+# Run the deployment script
+./deploy-ddalab.sh
+
+# Access the application
+# Web interface: http://localhost:3000
+# API documentation: http://localhost:8001/docs
+```
+
+### Option 2: Manual Setup
+
+1. **Clone the repository**:
 
    ```bash
-   git clone https://github.com/sdraeger/DDALAB-setup.git
-   cd DDALAB-setup
+   git clone https://github.com/sdraeger/DDALAB.git
+   cd DDALAB
    ```
 
-2. **Set up SSL Certificates**:
+2. **Configure environment variables**:
 
-   Create self-signed certificates for development:
+   - Copy the example .env files (root and ddalab-web):
+
+     ```bash
+     cp .env.example .env
+     ```
+
+     ```bash
+     cp ddalab-web/.env.example ddalab-web/.env.local
+     ```
+
+   - Edit the .env files with your preferred settings:
+
+     ```bash
+     vim .env
+     ```
+
+     ```bash
+     vim ddalab-web/.env.local
+     ```
+
+3. **Start the application**:
 
    ```bash
-   mkdir -p certs
-   cd certs
+   docker-compose up --build
+   ```
+
+   Add `-d` flag to run in detached mode:
+
+   ```bash
+   docker-compose up --build -d
+   ```
+
+4. **Access the application**:
+
+   - Web interface: `https://localhost`
+   - API documentation: `https://localhost/docs`
+
+5. **Stop the application**:
+
+   ```bash
+   docker-compose down
+   ```
+
+## Docker Hub Setup
+
+If you want to contribute to the project and have your changes automatically build and push Docker images to Docker Hub, see [DOCKER_HUB_SETUP.md](DOCKER_HUB_SETUP.md) for detailed instructions on setting up the required credentials.
+
+### Push Images to Docker Hub
+
+```bash
+# Build images first
+npm run build:docker
+
+# Push to Docker Hub
+npm run push:docker
+
+# On Windows
+npm run push:docker:win
+```
+
+For detailed instructions, see [DOCKER_PUSH_GUIDE.md](DOCKER_PUSH_GUIDE.md).
+
+## Development
+
+### ConfigManager Development
+
+To run the ConfigManager application in development mode:
+
+```bash
+# Start ConfigManager in development mode with hot reloading
+npm run dev:configmanager
+
+# Or use the shell script
+./scripts/dev-configmanager.sh
+
+# For Windows users
+scripts\dev-configmanager.bat
+```
+
+For detailed development instructions, see [packages/configmanager/DEV_README.md](packages/configmanager/DEV_README.md).
+
+## SSL Configuration
+
+If using `traefik` for SSL:
+
+1. Create `server.crt` and `server.key` in the `certs/` directory
+
+   ```bash
    openssl genrsa -out server.key 2048
    openssl req -new -key server.key -out server.csr
    openssl x509 -req -days 365 -in server.csr -signkey server.key -out server.crt
-   cd ..
    ```
 
-3. **Configure Traefik**:
-
-   - Review and adjust `traefik.yml` for your needs
-   - Check routing rules in `dynamic/routers.yml`
-   - Set appropriate permissions for acme.json:
-
-     ```bash
-     touch acme.json
-     chmod 600 acme.json
-     ```
-
-4. **Start the Services**:
-
-   Using the provided script:
+2. Generate a username and password hash for the traefik dashboard
 
    ```bash
-   ./up.sh
+   echo -n "admin" | htpasswd -c auth admin
    ```
 
-   Or manually:
+3. Set the hash in your `.env` file:
 
-   ```bash
-   docker compose up
    ```
-
-5. **Clean up**:
-
-   When needed, use the cleanup script:
-
-   ```bash
-   ./cleanup.sh
+   TRAEFIK_PASSWORD_HASH='$2y$...'  # Make sure to use single quotes
    ```
-
-## Configuration Files
-
-### `docker-compose.yml`
-
-Contains the service definitions and their configurations. Review and adjust the following:
-
-- Port mappings
-- Volume mounts
-- Environment variables
-- Service dependencies
-
-### Environment Variables (`.env`)
-
-The `.env` file contains important configuration settings. Key variables include:
-
-#### `DDALAB_ALLOWED_DIRS`
-
-This variable controls directory access and mapping between the host system and containers. It's crucial for security and proper file system access.
-
-Format: `HOST_PATH:CONTAINER_PATH:PERMISSION[,HOST_PATH2:CONTAINER_PATH2:PERMISSION2,...]`
-
-Components:
-
-- `HOST_PATH`: Absolute path on your host machine
-- `CONTAINER_PATH`: Corresponding path inside the container
-- `PERMISSION`: Access level (`ro` for read-only, `rw` for read-write)
-
-Example configurations:
-
-```env
-# Single directory with read-only access
-DDALAB_ALLOWED_DIRS=/Users/your-name/Desktop:/app/data/Desktop:ro
-
-# Multiple directories with different permissions
-DDALAB_ALLOWED_DIRS=/Users/your-name/Desktop:/app/data/Desktop:ro:/Users/your-name/uploads:/app/uploads:rw
-```
-
-Security considerations:
-
-- Always use absolute paths
-- Carefully consider which directories need read-write access
-- Restrict access to only necessary directories
-- Regularly audit directory permissions
-
-### `traefik.yml`
-
-Main Traefik configuration file. Key areas to review:
-
-- Entry points configuration
-- SSL settings
-- Dashboard access
-- Log levels
-
-### `dynamic/routers.yml`
-
-Contains the routing rules for your services. Adjust:
-
-- Service endpoints
-- Middleware chains
-- TLS options
-
-## Monitoring
-
-The setup includes Prometheus for monitoring. Access the following endpoints:
-
-- Traefik Dashboard: `https://localhost:8080`
-- Prometheus: `http://localhost:9090`
 
 ## Troubleshooting
 
-1. **Certificate Issues**:
-   - Ensure `certs/` directory contains valid certificates
-   - Check `acme.json` permissions (should be 600)
-   - Verify Traefik SSL configuration in `traefik.yml`
+1. **Container startup issues**:
 
-2. **Network Issues**:
-   - Check if ports are already in use
-   - Verify Docker network creation
-   - Review service logs: `docker compose logs [service_name]`
+   - Check logs: `docker-compose logs`
+   - Specific service logs: `docker-compose logs server`
 
-3. **Permission Issues**:
-   - Ensure proper file permissions on all configuration files
-   - Verify Docker daemon access
-   - Check volume mount permissions
+2. **Connection issues**:
 
-## Security Notes
+   - Ensure ports aren't blocked by firewall
+   - Verify ports aren't being used by other services
 
-1. **Dashboard Security**:
-   - Change default credentials in `traefik.yml`
-   - Use strong passwords
-   - Consider restricting dashboard access to specific IPs
+3. **Performance issues**:
+   - Check Docker resource allocation in Docker Desktop settings
+   - Increase memory/CPU limits if needed
 
-2. **SSL Configuration**:
-   - Keep certificates secure
-   - Regularly update certificates
-   - Use production-grade certificates in production
+## Project Structure
 
-## Support
+```
+├── docker-compose.yml    # Docker configuration
+├── .env                  # Environment configuration
+├── python/               # Application code
+│   ├── ddalab/           # GUI client package
+│   ├── server/           # FastAPI server package
+│   └── ...
+└── data/                 # Default data directory
+```
 
-For issues specific to this setup configuration:
+## API Documentation
 
-- Open an issue in this repository
+Once running, access the API documentation at:
 
-For DDALAB application issues:
-
-- Visit the main DDALAB repository
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
