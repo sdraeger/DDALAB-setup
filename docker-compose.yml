@@ -11,7 +11,7 @@ services:
 
   web:
     # Use Docker Hub image if DDALAB_USE_DOCKER_HUB=true, otherwise build locally
-    image: ${DDALAB_WEB_IMAGE:-sdraeger1/ddalab-web:$${VERSION:-latest}}
+    image: ${DDALAB_WEB_IMAGE:-sdraeger1/ddalab-web:latest}
     build:
       context: .
       dockerfile: ./packages/web/Dockerfile
@@ -46,7 +46,7 @@ services:
 
   api:
     # Use Docker Hub image if DDALAB_API_IMAGE is set, otherwise build locally
-    image: ${DDALAB_API_IMAGE:-sdraeger1/ddalab-api:$${VERSION:-latest}}
+    image: ${DDALAB_API_IMAGE:-sdraeger1/ddalab-api:latest}
     build:
       context: .
       dockerfile: ./packages/api/Dockerfile
