@@ -17,7 +17,7 @@ services:
       dockerfile: ./packages/web/Dockerfile
     platform: linux/amd64
     env_file:
-      - ./.env
+      - ./.env.web
     environment:
       # Next.js Environment Variables
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8001}
@@ -25,10 +25,6 @@ services:
       NODE_ENV: production
       # Session Configuration
       SESSION_EXPIRATION: ${SESSION_EXPIRATION:-10080}
-    volumes:
-      - type: bind
-        source: ./.env
-        target: /app/.env
     ports:
       - "${WEB_PORT:-3000}:3000"
     healthcheck:
@@ -37,7 +33,8 @@ services:
       timeout: 3s
       retries: 5
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     networks:
       - internal
     labels:
@@ -60,11 +57,12 @@ services:
       - "8001"
       - "8002"
     env_file:
-      - ./.env
+      - ./.env.api
     environment:
-      MINIO_HOST: "minio:9000"
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      DDALAB_MINIO_HOST: "minio:9000"
+      DDALAB_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      DDALAB_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      DDALAB_MINIO_BUCKET_NAME: "dda-results"
       DDALAB_ALLOWED_DIRS: ${DDALAB_ALLOWED_DIRS}
       PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
       DDALAB_REDIS_HOST: redis
@@ -74,8 +72,12 @@ services:
       DDALAB_REDIS_USE_SSL: ${DDALAB_REDIS_USE_SSL:-False}
       DDALAB_PLOT_CACHE_TTL: ${DDALAB_PLOT_CACHE_TTL:-3600}
     volumes:
-      - prometheus_metrics:/tmp/prometheus
-      - ${DDALAB_DATA_DIR:-./data}:/app/data:rw
+      - type: bind
+        source: ./prometheus-metrics
+        target: /tmp/prometheus
+      - type: bind
+        source: ${DDALAB_DATA_DIR:-./data}
+        target: /app/data
     depends_on:
       postgres:
         condition: service_healthy
@@ -207,7 +209,6 @@ services:
 
 volumes:
   prometheus_data:
-  prometheus_metrics:
   grafana_data:
   postgres-data:
   minio-data:
