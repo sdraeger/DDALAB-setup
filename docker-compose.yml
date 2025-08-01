@@ -10,7 +10,7 @@ services:
     restart: unless-stopped
 
   web:
-    # Force local build only - no image pull
+    image: sdraeger1/ddalab-web:latest
     build:
       context: .
       dockerfile: ./packages/web/Dockerfile
@@ -41,7 +41,7 @@ services:
     restart: unless-stopped
 
   api:
-    # Force local build only - no image pull
+    image: sdraeger1/ddalab-api:latest
     build:
       context: .
       dockerfile: ./packages/api/Dockerfile
