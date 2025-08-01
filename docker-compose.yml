@@ -11,7 +11,7 @@ services:
 
   web:
     # Use Docker Hub image if DDALAB_USE_DOCKER_HUB=true, otherwise build locally
-    image: ${DDALAB_WEB_IMAGE:-sdraeger1/ddalab-web:latest}
+    image: ${DDALAB_WEB_IMAGE:-ddalab-web-local:latest}
     build:
       context: .
       dockerfile: ./packages/web/Dockerfile
