@@ -41,8 +41,7 @@ services:
     restart: unless-stopped
 
   api:
-    # Use Docker Hub image if DDALAB_API_IMAGE is set, otherwise build locally
-    image: ${DDALAB_API_IMAGE:-sdraeger1/ddalab-api:latest}
+    # Force local build only - no image pull
     build:
       context: .
       dockerfile: ./packages/api/Dockerfile
