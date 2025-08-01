@@ -15,7 +15,6 @@ services:
     build:
       context: .
       dockerfile: ./packages/web/Dockerfile
-    platform: linux/amd64
     env_file:
       - ./.env.web
     environment:
@@ -29,9 +28,10 @@ services:
       - "${WEB_PORT:-3000}:3000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
     depends_on:
       api:
         condition: service_healthy
