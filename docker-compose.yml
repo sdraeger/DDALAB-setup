@@ -172,8 +172,9 @@ services:
   prometheus:
     image: prom/prometheus:v3.2.1
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
+      - prometheus_tmp:/tmp
     ports:
       - "9090:9090"
     command:
@@ -185,6 +186,10 @@ services:
       - "--web.enable-lifecycle"
       - "--query.timeout=2m"
       - "--query.max-concurrency=20"
+      - "--storage.tsdb.no-lockfile"
+      - "--query.log-file=/tmp/queries.active"
+      - "--query.log-file-mode=0644"
+      - "--query.active-query-tracker-dir=/tmp"
     restart: unless-stopped
     networks:
       - internal
@@ -206,6 +211,7 @@ services:
 
 volumes:
   prometheus_data:
+  prometheus_tmp:
   grafana_data:
   postgres-data:
   minio-data:
