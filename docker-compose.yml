@@ -183,7 +183,8 @@ services:
       - "--web.console.templates=/etc/prometheus/consoles"
       - "--storage.tsdb.retention.time=200h"
       - "--web.enable-lifecycle"
-    user: "65534:65534"
+      - "--query.timeout=2m"
+      - "--query.max-concurrency=20"
     restart: unless-stopped
     networks:
       - internal
