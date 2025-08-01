@@ -15,7 +15,7 @@ services:
       context: .
       dockerfile: ./packages/web/Dockerfile
     env_file:
-      - ./.env.web
+      - ./.env
     environment:
       # Next.js Environment Variables
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8001}
@@ -55,7 +55,7 @@ services:
       - "8001"
       - "8002"
     env_file:
-      - ./.env.api
+      - ./.env
     environment:
       DDALAB_MINIO_HOST: "minio:9000"
       DDALAB_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
