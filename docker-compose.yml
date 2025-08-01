@@ -10,8 +10,7 @@ services:
     restart: unless-stopped
 
   web:
-    # Use Docker Hub image if DDALAB_USE_DOCKER_HUB=true, otherwise build locally
-    image: ${DDALAB_WEB_IMAGE:-sdraeger1/ddalab-web:latest}
+    # Force local build only - no image pull
     build:
       context: .
       dockerfile: ./packages/web/Dockerfile
