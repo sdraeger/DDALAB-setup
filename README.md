@@ -281,9 +281,8 @@ DDALAB_MEMORY_LIMIT=4g
 
 ## 🤝 Support
 
-- GitHub Issues: [github.com/yourusername/ddalab-deploy/issues](https://github.com/yourusername/ddalab-deploy/issues)
-- Documentation: [ddalab.docs.com](https://ddalab.docs.com)
-- Email: support@ddalab.com
+- GitHub Issues: [github.com/sdraeger/DDALAB-setup/issues](https://github.com/sdraeger/DDALAB-setup/issues)
+- Email: sdraeger@salk.edu
 
 ## 📝 License
 
