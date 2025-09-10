@@ -68,27 +68,45 @@ function Initialize-Environment {
         Write-Warning "No .env file found. Creating from template..."
         Copy-Item .env.example .env
         
-        # Generate secure passwords
-        Write-Host "Generating secure passwords..."
-        
-        # Function to generate password
-        function Get-RandomPassword {
-            -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 25 | ForEach-Object {[char]$_})
+        # Check if database volumes already exist
+        $dbVolumeExists = $false
+        try {
+            $null = docker volume inspect ddalab-setup_postgres-data 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                $dbVolumeExists = $true
+            }
+        } catch {
+            # Volume doesn't exist
         }
         
-        # Read content
-        $content = Get-Content .env
+        if (-not $dbVolumeExists) {
+            # Generate secure passwords only for fresh installation
+            Write-Host "Generating secure passwords for fresh installation..."
+            
+            # Function to generate password
+            function Get-RandomPassword {
+                -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 25 | ForEach-Object {[char]$_})
+            }
+            
+            # Read content
+            $content = Get-Content .env
+            
+            # Update passwords
+            $content = $content -replace 'DB_PASSWORD=.*', "DB_PASSWORD=$(Get-RandomPassword)"
+            $content = $content -replace 'MINIO_ROOT_PASSWORD=.*', "MINIO_ROOT_PASSWORD=$(Get-RandomPassword)"
+            $content = $content -replace 'JWT_SECRET_KEY=.*', "JWT_SECRET_KEY=$(Get-RandomPassword)"
+            $content = $content -replace 'NEXTAUTH_SECRET=.*', "NEXTAUTH_SECRET=$(Get-RandomPassword)"
+            
+            # Write back
+            $content | Set-Content .env
+            
+            Write-Success "✓ Environment file created with secure passwords"
+        } else {
+            Write-Warning "⚠ Database volumes exist - keeping default passwords from template"
+            Write-Warning "⚠ Please manually update passwords in .env if needed"
+            Write-Success "✓ Environment file created with template passwords"
+        }
         
-        # Update passwords
-        $content = $content -replace 'DB_PASSWORD=.*', "DB_PASSWORD=$(Get-RandomPassword)"
-        $content = $content -replace 'MINIO_ROOT_PASSWORD=.*', "MINIO_ROOT_PASSWORD=$(Get-RandomPassword)"
-        $content = $content -replace 'JWT_SECRET_KEY=.*', "JWT_SECRET_KEY=$(Get-RandomPassword)"
-        $content = $content -replace 'NEXTAUTH_SECRET=.*', "NEXTAUTH_SECRET=$(Get-RandomPassword)"
-        
-        # Write back
-        $content | Set-Content .env
-        
-        Write-Success "✓ Environment file created with secure passwords"
         Write-Warning "Please review .env and update any settings as needed"
     } else {
         Write-Success "✓ Environment file exists"

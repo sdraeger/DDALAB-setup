@@ -53,30 +53,43 @@ setup_environment() {
         echo -e "${YELLOW}No .env file found. Creating from template...${NC}"
         cp .env.example .env
         
-        # Generate secure passwords
-        echo "Generating secure passwords..."
-        
-        # Function to generate password
-        gen_password() {
-            openssl rand -base64 32 | tr -d "=+/" | cut -c1-25
-        }
-        
-        # Update passwords in .env
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            # macOS
-            sed -i '' "s/DB_PASSWORD=.*/DB_PASSWORD=$(gen_password)/" .env
-            sed -i '' "s/MINIO_ROOT_PASSWORD=.*/MINIO_ROOT_PASSWORD=$(gen_password)/" .env
-            sed -i '' "s/JWT_SECRET_KEY=.*/JWT_SECRET_KEY=$(gen_password)/" .env
-            sed -i '' "s/NEXTAUTH_SECRET=.*/NEXTAUTH_SECRET=$(gen_password)/" .env
-        else
-            # Linux
-            sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=$(gen_password)/" .env
-            sed -i "s/MINIO_ROOT_PASSWORD=.*/MINIO_ROOT_PASSWORD=$(gen_password)/" .env
-            sed -i "s/JWT_SECRET_KEY=.*/JWT_SECRET_KEY=$(gen_password)/" .env
-            sed -i "s/NEXTAUTH_SECRET=.*/NEXTAUTH_SECRET=$(gen_password)/" .env
+        # Check if database volumes already exist
+        DB_VOLUME_EXISTS=false
+        if docker volume inspect ddalab-setup_postgres-data &> /dev/null; then
+            DB_VOLUME_EXISTS=true
         fi
         
-        echo -e "${GREEN}✓ Environment file created with secure passwords${NC}"
+        if [ "$DB_VOLUME_EXISTS" = false ]; then
+            # Generate secure passwords only for fresh installation
+            echo "Generating secure passwords for fresh installation..."
+            
+            # Function to generate password
+            gen_password() {
+                openssl rand -base64 32 | tr -d "=+/" | cut -c1-25
+            }
+            
+            # Update passwords in .env
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                # macOS
+                sed -i '' "s/DB_PASSWORD=.*/DB_PASSWORD=$(gen_password)/" .env
+                sed -i '' "s/MINIO_ROOT_PASSWORD=.*/MINIO_ROOT_PASSWORD=$(gen_password)/" .env
+                sed -i '' "s/JWT_SECRET_KEY=.*/JWT_SECRET_KEY=$(gen_password)/" .env
+                sed -i '' "s/NEXTAUTH_SECRET=.*/NEXTAUTH_SECRET=$(gen_password)/" .env
+            else
+                # Linux
+                sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=$(gen_password)/" .env
+                sed -i "s/MINIO_ROOT_PASSWORD=.*/MINIO_ROOT_PASSWORD=$(gen_password)/" .env
+                sed -i "s/JWT_SECRET_KEY=.*/JWT_SECRET_KEY=$(gen_password)/" .env
+                sed -i "s/NEXTAUTH_SECRET=.*/NEXTAUTH_SECRET=$(gen_password)/" .env
+            fi
+            
+            echo -e "${GREEN}✓ Environment file created with secure passwords${NC}"
+        else
+            echo -e "${YELLOW}⚠ Database volumes exist - keeping default passwords from template${NC}"
+            echo -e "${YELLOW}⚠ Please manually update passwords in .env if needed${NC}"
+            echo -e "${GREEN}✓ Environment file created with template passwords${NC}"
+        fi
+        
         echo -e "${YELLOW}Please review .env and update any settings as needed${NC}"
     else
         echo -e "${GREEN}✓ Environment file exists${NC}"
