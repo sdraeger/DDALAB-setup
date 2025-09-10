@@ -27,7 +27,7 @@ cd DDALAB-setup
 .\ddalab.ps1 start
 ```
 
-That's it! The script will:
+This starts DDALAB + additional checks:
 
 - ✅ Check requirements
 - ✅ Generate secure passwords automatically
