@@ -54,7 +54,7 @@ services:
       # Additional runtime configuration
       - NODE_OPTIONS=--max-old-space-size=4096
     volumes:
-      - ./data:/app/data
+      - ${DATA_DIR:-./data}:/app/data
       - ./.env:/app/.env:ro
       - ./.env:/app/packages/web/.env:ro
       - ./.env:/.env:ro
@@ -71,12 +71,21 @@ services:
       - ddalab-network
     labels:
       - "traefik.enable=true"
-      # Web frontend
-      - "traefik.http.routers.ddalab-web.rule=Host(`${DOMAIN:-localhost}`)"
-      - "traefik.http.routers.ddalab-web.entrypoints=websecure"
-      - "traefik.http.routers.ddalab-web.tls=true"
-      - "traefik.http.routers.ddalab-web.service=ddalab-web"
-      - "traefik.http.services.ddalab-web.loadbalancer.server.port=3000"
+      # Web20 frontend (default)
+      - "traefik.http.routers.ddalab-web20.rule=Host(`${DOMAIN:-localhost}`) && !PathPrefix(`/api`) && !PathPrefix(`/api-backend`) && !PathPrefix(`/docs`) && !PathPrefix(`/graphql`) && !PathPrefix(`/web30`)"
+      - "traefik.http.routers.ddalab-web20.entrypoints=websecure"
+      - "traefik.http.routers.ddalab-web20.tls=true"
+      - "traefik.http.routers.ddalab-web20.service=ddalab-web20"
+      - "traefik.http.services.ddalab-web20.loadbalancer.server.port=3000"
+      # Web30 frontend (clinical view)
+      - "traefik.http.routers.ddalab-web30.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/web30`)"
+      - "traefik.http.routers.ddalab-web30.entrypoints=websecure"
+      - "traefik.http.routers.ddalab-web30.tls=true"
+      - "traefik.http.routers.ddalab-web30.priority=90"
+      - "traefik.http.routers.ddalab-web30.service=ddalab-web30"
+      - "traefik.http.routers.ddalab-web30.middlewares=web30-stripprefix"
+      - "traefik.http.middlewares.web30-stripprefix.stripprefix.prefixes=/web30"
+      - "traefik.http.services.ddalab-web30.loadbalancer.server.port=3001"
       # API backend
       - "traefik.http.routers.ddalab-api.rule=Host(`${DOMAIN:-localhost}`) && (PathPrefix(`/api`) || PathPrefix(`/api-backend`) || PathPrefix(`/docs`) || PathPrefix(`/graphql`))"
       - "traefik.http.routers.ddalab-api.entrypoints=websecure"
