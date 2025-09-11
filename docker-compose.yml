@@ -83,8 +83,6 @@ services:
       - "traefik.http.routers.ddalab-web30.tls=true"
       - "traefik.http.routers.ddalab-web30.priority=90"
       - "traefik.http.routers.ddalab-web30.service=ddalab-web30"
-      - "traefik.http.routers.ddalab-web30.middlewares=web30-stripprefix"
-      - "traefik.http.middlewares.web30-stripprefix.stripprefix.prefixes=/web30"
       - "traefik.http.services.ddalab-web30.loadbalancer.server.port=3001"
       # API backend
       - "traefik.http.routers.ddalab-api.rule=Host(`${DOMAIN:-localhost}`) && (PathPrefix(`/api`) || PathPrefix(`/api-backend`) || PathPrefix(`/docs`) || PathPrefix(`/graphql`))"
