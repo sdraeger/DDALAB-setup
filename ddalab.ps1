@@ -2,7 +2,7 @@
 
 param(
     [Parameter(Position=0)]
-    [ValidateSet('start', 'stop', 'restart', 'logs', 'status', 'backup')]
+    [ValidateSet('start', 'stop', 'restart', 'logs', 'status', 'backup', 'update')]
     [string]$Command
 )
 
@@ -237,6 +237,24 @@ function Backup-Data {
     }
 }
 
+function Update-Services {
+    Write-Host "Updating DDALAB docker images..."
+    
+    # Pull latest images
+    Write-Host "Pulling latest images from Docker Hub..."
+    docker compose pull
+    
+    if ($LASTEXITCODE -eq 0) {
+        Write-Success "✓ Successfully pulled latest images"
+        Write-Host ""
+        Write-Warning "To apply the updates, restart DDALAB with:"
+        Write-Success "  .\ddalab.ps1 restart"
+    } else {
+        Write-Error "✗ Failed to pull latest images"
+        exit 1
+    }
+}
+
 # Main execution
 Show-Banner
 
@@ -264,6 +282,10 @@ switch ($Command) {
     'backup' {
         Backup-Data
     }
+    'update' {
+        Test-Requirements
+        Update-Services
+    }
     default {
         Write-Host "Usage: .\ddalab.ps1 <command>"
         Write-Host ""
@@ -274,5 +296,6 @@ switch ($Command) {
         Write-Host "  logs     - Show service logs (follow mode)"
         Write-Host "  status   - Show service status"
         Write-Host "  backup   - Create database backup"
+        Write-Host "  update   - Pull latest DDALAB docker images"
     }
 }

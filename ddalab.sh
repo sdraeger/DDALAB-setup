@@ -187,6 +187,30 @@ backup_data() {
     ./scripts/backup.sh
 }
 
+update_services() {
+    echo "Updating DDALAB docker images..."
+    
+    if docker compose version &> /dev/null; then
+        COMPOSE_CMD="docker compose"
+    else
+        COMPOSE_CMD="docker-compose"
+    fi
+    
+    # Pull latest images
+    echo "Pulling latest images from Docker Hub..."
+    $COMPOSE_CMD pull
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ Successfully pulled latest images${NC}"
+        echo ""
+        echo -e "${YELLOW}To apply the updates, restart DDALAB with:${NC}"
+        echo -e "${GREEN}  ./ddalab.sh restart${NC}"
+    else
+        echo -e "${RED}✗ Failed to pull latest images${NC}"
+        exit 1
+    fi
+}
+
 # Main script
 print_banner
 
@@ -214,8 +238,12 @@ case "$1" in
     backup)
         backup_data
         ;;
+    update)
+        check_requirements
+        update_services
+        ;;
     *)
-        echo "Usage: $0 {start|stop|restart|logs|status|backup}"
+        echo "Usage: $0 {start|stop|restart|logs|status|backup|update}"
         echo ""
         echo "Commands:"
         echo "  start    - Start DDALAB (sets up environment if needed)"
@@ -224,6 +252,7 @@ case "$1" in
         echo "  logs     - Show service logs (follow mode)"
         echo "  status   - Show service status"
         echo "  backup   - Create database backup"
+        echo "  update   - Pull latest DDALAB docker images"
         exit 1
         ;;
 esac

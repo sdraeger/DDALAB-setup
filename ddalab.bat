@@ -19,6 +19,7 @@ echo   restart  - Restart DDALAB
 echo   logs     - Show service logs
 echo   status   - Show service status
 echo   backup   - Create database backup
+echo   update   - Pull latest DDALAB docker images
 echo.
 
 :end
