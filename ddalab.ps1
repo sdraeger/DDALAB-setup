@@ -2,7 +2,7 @@
 
 param(
     [Parameter(Position=0)]
-    [ValidateSet('start', 'stop', 'restart', 'logs', 'status', 'backup', 'update')]
+    [ValidateSet('start', 'stop', 'restart', 'update', 'logs', 'status', 'backup')]
     [string]$Command
 )
 
@@ -68,45 +68,27 @@ function Initialize-Environment {
         Write-Warning "No .env file found. Creating from template..."
         Copy-Item .env.example .env
         
-        # Check if database volumes already exist
-        $dbVolumeExists = $false
-        try {
-            $null = docker volume inspect ddalab-setup_postgres-data 2>$null
-            if ($LASTEXITCODE -eq 0) {
-                $dbVolumeExists = $true
-            }
-        } catch {
-            # Volume doesn't exist
+        # Generate secure passwords
+        Write-Host "Generating secure passwords..."
+        
+        # Function to generate password
+        function Get-RandomPassword {
+            -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 25 | ForEach-Object {[char]$_})
         }
         
-        if (-not $dbVolumeExists) {
-            # Generate secure passwords only for fresh installation
-            Write-Host "Generating secure passwords for fresh installation..."
-            
-            # Function to generate password
-            function Get-RandomPassword {
-                -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 25 | ForEach-Object {[char]$_})
-            }
-            
-            # Read content
-            $content = Get-Content .env
-            
-            # Update passwords
-            $content = $content -replace 'DB_PASSWORD=.*', "DB_PASSWORD=$(Get-RandomPassword)"
-            $content = $content -replace 'MINIO_ROOT_PASSWORD=.*', "MINIO_ROOT_PASSWORD=$(Get-RandomPassword)"
-            $content = $content -replace 'JWT_SECRET_KEY=.*', "JWT_SECRET_KEY=$(Get-RandomPassword)"
-            $content = $content -replace 'NEXTAUTH_SECRET=.*', "NEXTAUTH_SECRET=$(Get-RandomPassword)"
-            
-            # Write back
-            $content | Set-Content .env
-            
-            Write-Success "✓ Environment file created with secure passwords"
-        } else {
-            Write-Warning "⚠ Database volumes exist - keeping default passwords from template"
-            Write-Warning "⚠ Please manually update passwords in .env if needed"
-            Write-Success "✓ Environment file created with template passwords"
-        }
+        # Read content
+        $content = Get-Content .env
         
+        # Update passwords
+        $content = $content -replace 'DB_PASSWORD=.*', "DB_PASSWORD=$(Get-RandomPassword)"
+        $content = $content -replace 'MINIO_ROOT_PASSWORD=.*', "MINIO_ROOT_PASSWORD=$(Get-RandomPassword)"
+        $content = $content -replace 'JWT_SECRET_KEY=.*', "JWT_SECRET_KEY=$(Get-RandomPassword)"
+        $content = $content -replace 'NEXTAUTH_SECRET=.*', "NEXTAUTH_SECRET=$(Get-RandomPassword)"
+        
+        # Write back
+        $content | Set-Content .env
+        
+        Write-Success "✓ Environment file created with secure passwords"
         Write-Warning "Please review .env and update any settings as needed"
     } else {
         Write-Success "✓ Environment file exists"
@@ -237,22 +219,85 @@ function Backup-Data {
     }
 }
 
-function Update-Services {
-    Write-Host "Updating DDALAB docker images..."
+function Update-System {
+    Write-Warning "Updating DDALAB system..."
     
-    # Pull latest images
-    Write-Host "Pulling latest images from Docker Hub..."
-    docker compose pull
-    
-    if ($LASTEXITCODE -eq 0) {
-        Write-Success "✓ Successfully pulled latest images"
-        Write-Host ""
-        Write-Warning "To apply the updates, restart DDALAB with:"
-        Write-Success "  .\ddalab.ps1 restart"
-    } else {
-        Write-Error "✗ Failed to pull latest images"
+    # Check if we're in a git repository
+    if (-not (Test-Path .git)) {
+        Write-Error "Error: Not in a git repository"
+        Write-Host "Please navigate to the DDALAB project root directory"
         exit 1
     }
+    
+    # Check for uncommitted changes
+    $gitStatus = git status --porcelain 2>$null
+    if ($gitStatus) {
+        Write-Warning "Warning: You have uncommitted changes"
+        Write-Host "Uncommitted changes:"
+        git status --porcelain
+        Write-Host ""
+        $continue = Read-Host "Continue with update? This may overwrite local changes (y/N)"
+        if ($continue -notmatch '^[Yy]$') {
+            Write-Host "Update cancelled"
+            exit 1
+        }
+    }
+    
+    # Save current branch
+    $currentBranch = git rev-parse --abbrev-ref HEAD
+    Write-Host "Current branch: $currentBranch"
+    
+    # Pull latest changes
+    Write-Host "Pulling latest changes from git..."
+    git pull origin $currentBranch
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Error: Git pull failed"
+        Write-Host "Please resolve any conflicts manually and run the update again"
+        exit 1
+    }
+    
+    Write-Success "✓ Git pull completed successfully"
+    
+    # Update Docker images and restart services
+    Write-Host "Updating Docker images and restarting services..."
+    
+    # Stop current services
+    Write-Host "Stopping current services..."
+    docker compose down
+    
+    # Pull latest images
+    Write-Host "Pulling latest Docker images..."
+    docker compose pull
+    
+    # Rebuild and start services
+    Write-Host "Rebuilding and starting services..."
+    docker compose up -d --build
+    
+    # Wait for services
+    Write-Host "Waiting for services to start..."
+    Start-Sleep -Seconds 15
+    
+    # Show status
+    Write-Host ""
+    Write-Host "Update completed! Service status:"
+    docker compose ps
+    
+    # Get the domain from .env
+    $domain = "localhost"
+    if (Test-Path .env) {
+        $envContent = Get-Content .env | Where-Object { $_ -match "^DOMAIN=" }
+        if ($envContent) {
+            $domain = $envContent -replace "^DOMAIN=", ""
+        }
+    }
+    
+    Write-Host ""
+    Write-Success "╔══════════════════════════════════════════════════════════╗"
+    Write-Success "║                  DDALAB Update Complete!                 ║"
+    Write-Success "╠══════════════════════════════════════════════════════════╣"
+    Write-Success "║  Access DDALAB at: https://$domain                      "
+    Write-Success "║  All services have been updated and restarted            ║"
+    Write-Success "╚══════════════════════════════════════════════════════════╝"
 }
 
 # Main execution
@@ -273,6 +318,10 @@ switch ($Command) {
         Start-Sleep -Seconds 5
         Start-Services
     }
+    'update' {
+        Test-Requirements
+        Update-System
+    }
     'logs' {
         Show-Logs
     }
@@ -282,10 +331,6 @@ switch ($Command) {
     'backup' {
         Backup-Data
     }
-    'update' {
-        Test-Requirements
-        Update-Services
-    }
     default {
         Write-Host "Usage: .\ddalab.ps1 <command>"
         Write-Host ""
@@ -293,9 +338,9 @@ switch ($Command) {
         Write-Host "  start    - Start DDALAB (sets up environment if needed)"
         Write-Host "  stop     - Stop DDALAB"
         Write-Host "  restart  - Restart DDALAB"
+        Write-Host "  update   - Update DDALAB (git pull + rebuild Docker images)"
         Write-Host "  logs     - Show service logs (follow mode)"
         Write-Host "  status   - Show service status"
         Write-Host "  backup   - Create database backup"
-        Write-Host "  update   - Pull latest DDALAB docker images"
     }
 }

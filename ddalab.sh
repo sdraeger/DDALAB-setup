@@ -53,43 +53,30 @@ setup_environment() {
         echo -e "${YELLOW}No .env file found. Creating from template...${NC}"
         cp .env.example .env
         
-        # Check if database volumes already exist
-        DB_VOLUME_EXISTS=false
-        if docker volume inspect ddalab-setup_postgres-data &> /dev/null; then
-            DB_VOLUME_EXISTS=true
-        fi
+        # Generate secure passwords
+        echo "Generating secure passwords..."
         
-        if [ "$DB_VOLUME_EXISTS" = false ]; then
-            # Generate secure passwords only for fresh installation
-            echo "Generating secure passwords for fresh installation..."
-            
-            # Function to generate password
-            gen_password() {
-                openssl rand -base64 32 | tr -d "=+/" | cut -c1-25
-            }
-            
-            # Update passwords in .env
-            if [[ "$OSTYPE" == "darwin"* ]]; then
-                # macOS
-                sed -i '' "s/DB_PASSWORD=.*/DB_PASSWORD=$(gen_password)/" .env
-                sed -i '' "s/MINIO_ROOT_PASSWORD=.*/MINIO_ROOT_PASSWORD=$(gen_password)/" .env
-                sed -i '' "s/JWT_SECRET_KEY=.*/JWT_SECRET_KEY=$(gen_password)/" .env
-                sed -i '' "s/NEXTAUTH_SECRET=.*/NEXTAUTH_SECRET=$(gen_password)/" .env
-            else
-                # Linux
-                sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=$(gen_password)/" .env
-                sed -i "s/MINIO_ROOT_PASSWORD=.*/MINIO_ROOT_PASSWORD=$(gen_password)/" .env
-                sed -i "s/JWT_SECRET_KEY=.*/JWT_SECRET_KEY=$(gen_password)/" .env
-                sed -i "s/NEXTAUTH_SECRET=.*/NEXTAUTH_SECRET=$(gen_password)/" .env
-            fi
-            
-            echo -e "${GREEN}✓ Environment file created with secure passwords${NC}"
+        # Function to generate password
+        gen_password() {
+            openssl rand -base64 32 | tr -d "=+/" | cut -c1-25
+        }
+        
+        # Update passwords in .env
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            # macOS
+            sed -i '' "s/DB_PASSWORD=.*/DB_PASSWORD=$(gen_password)/" .env
+            sed -i '' "s/MINIO_ROOT_PASSWORD=.*/MINIO_ROOT_PASSWORD=$(gen_password)/" .env
+            sed -i '' "s/JWT_SECRET_KEY=.*/JWT_SECRET_KEY=$(gen_password)/" .env
+            sed -i '' "s/NEXTAUTH_SECRET=.*/NEXTAUTH_SECRET=$(gen_password)/" .env
         else
-            echo -e "${YELLOW}⚠ Database volumes exist - keeping default passwords from template${NC}"
-            echo -e "${YELLOW}⚠ Please manually update passwords in .env if needed${NC}"
-            echo -e "${GREEN}✓ Environment file created with template passwords${NC}"
+            # Linux
+            sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=$(gen_password)/" .env
+            sed -i "s/MINIO_ROOT_PASSWORD=.*/MINIO_ROOT_PASSWORD=$(gen_password)/" .env
+            sed -i "s/JWT_SECRET_KEY=.*/JWT_SECRET_KEY=$(gen_password)/" .env
+            sed -i "s/NEXTAUTH_SECRET=.*/NEXTAUTH_SECRET=$(gen_password)/" .env
         fi
         
+        echo -e "${GREEN}✓ Environment file created with secure passwords${NC}"
         echo -e "${YELLOW}Please review .env and update any settings as needed${NC}"
     else
         echo -e "${GREEN}✓ Environment file exists${NC}"
@@ -187,28 +174,85 @@ backup_data() {
     ./scripts/backup.sh
 }
 
-update_services() {
-    echo "Updating DDALAB docker images..."
+update_system() {
+    echo -e "${YELLOW}Updating DDALAB system...${NC}"
     
+    # Check if we're in a git repository
+    if [ ! -d ".git" ]; then
+        echo -e "${RED}Error: Not in a git repository${NC}"
+        echo "Please navigate to the DDALAB project root directory"
+        exit 1
+    fi
+    
+    # Check for uncommitted changes
+    if ! git diff-index --quiet HEAD --; then
+        echo -e "${YELLOW}Warning: You have uncommitted changes${NC}"
+        echo "Uncommitted changes:"
+        git status --porcelain
+        echo ""
+        read -p "Continue with update? This may overwrite local changes (y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo "Update cancelled"
+            exit 1
+        fi
+    fi
+    
+    # Save current branch
+    CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    echo "Current branch: $CURRENT_BRANCH"
+    
+    # Pull latest changes
+    echo "Pulling latest changes from git..."
+    if ! git pull origin "$CURRENT_BRANCH"; then
+        echo -e "${RED}Error: Git pull failed${NC}"
+        echo "Please resolve any conflicts manually and run the update again"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}✓ Git pull completed successfully${NC}"
+    
+    # Update Docker images and restart services
+    echo "Updating Docker images and restarting services..."
+    
+    # Use docker compose v2 if available
     if docker compose version &> /dev/null; then
         COMPOSE_CMD="docker compose"
     else
         COMPOSE_CMD="docker-compose"
     fi
     
+    # Stop current services
+    echo "Stopping current services..."
+    $COMPOSE_CMD down
+    
     # Pull latest images
-    echo "Pulling latest images from Docker Hub..."
+    echo "Pulling latest Docker images..."
     $COMPOSE_CMD pull
     
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓ Successfully pulled latest images${NC}"
-        echo ""
-        echo -e "${YELLOW}To apply the updates, restart DDALAB with:${NC}"
-        echo -e "${GREEN}  ./ddalab.sh restart${NC}"
-    else
-        echo -e "${RED}✗ Failed to pull latest images${NC}"
-        exit 1
-    fi
+    # Rebuild and start services
+    echo "Rebuilding and starting services..."
+    $COMPOSE_CMD up -d --build
+    
+    # Wait for services
+    echo "Waiting for services to start..."
+    sleep 15
+    
+    # Show status
+    echo ""
+    echo "Update completed! Service status:"
+    $COMPOSE_CMD ps
+    
+    # Get the domain from .env
+    DOMAIN=$(grep "^DOMAIN=" .env | cut -d'=' -f2 || echo "localhost")
+    
+    echo ""
+    echo -e "${GREEN}╔══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║                  DDALAB Update Complete!                 ║${NC}"
+    echo -e "${GREEN}╠══════════════════════════════════════════════════════════╣${NC}"
+    echo -e "${GREEN}║  Access DDALAB at: https://${DOMAIN}                      ${NC}"
+    echo -e "${GREEN}║  All services have been updated and restarted            ║${NC}"
+    echo -e "${GREEN}╚══════════════════════════════════════════════════════════╝${NC}"
 }
 
 # Main script
@@ -229,6 +273,10 @@ case "$1" in
         sleep 5
         start_services
         ;;
+    update)
+        check_requirements
+        update_system
+        ;;
     logs)
         show_logs
         ;;
@@ -238,21 +286,17 @@ case "$1" in
     backup)
         backup_data
         ;;
-    update)
-        check_requirements
-        update_services
-        ;;
     *)
-        echo "Usage: $0 {start|stop|restart|logs|status|backup|update}"
+        echo "Usage: $0 {start|stop|restart|update|logs|status|backup}"
         echo ""
         echo "Commands:"
         echo "  start    - Start DDALAB (sets up environment if needed)"
         echo "  stop     - Stop DDALAB"
         echo "  restart  - Restart DDALAB"
+        echo "  update   - Update DDALAB (git pull + rebuild Docker images)"
         echo "  logs     - Show service logs (follow mode)"
         echo "  status   - Show service status"
         echo "  backup   - Create database backup"
-        echo "  update   - Pull latest DDALAB docker images"
         exit 1
         ;;
 esac
