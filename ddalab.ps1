@@ -2,7 +2,7 @@
 
 param(
     [Parameter(Position=0)]
-    [ValidateSet('start', 'stop', 'restart', 'update', 'logs', 'status', 'backup')]
+    [ValidateSet('start', 'stop', 'restart', 'update', 'logs', 'status', 'backup', 'trust-cert')]
     [string]$Command
 )
 
@@ -125,6 +125,70 @@ function Initialize-SSL {
     } else {
         Write-Success "✓ SSL certificates exist"
     }
+}
+
+function Trust-Certificate {
+    if (-not (Test-Path certs/cert.pem)) {
+        Write-Error "Certificate not found: certs/cert.pem"
+        return
+    }
+
+    Write-Host "Setting up certificate trust for Windows..."
+    
+    try {
+        # Check if running as Administrator
+        $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
+        $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
+        $isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+        
+        if ($isAdmin) {
+            # Convert PEM to X509Certificate2
+            $certContent = Get-Content certs/cert.pem -Raw
+            $certContent = $certContent -replace "-----BEGIN CERTIFICATE-----", ""
+            $certContent = $certContent -replace "-----END CERTIFICATE-----", ""
+            $certContent = $certContent -replace "`r", ""
+            $certContent = $certContent -replace "`n", ""
+            
+            $certBytes = [System.Convert]::FromBase64String($certContent)
+            $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
+            $cert.Import($certBytes)
+            
+            # Add to Windows certificate store
+            $store = New-Object System.Security.Cryptography.X509Certificates.X509Store("Root", "LocalMachine")
+            $store.Open("ReadWrite")
+            
+            # Check if certificate already exists
+            $existingCert = $store.Certificates | Where-Object { $_.Thumbprint -eq $cert.Thumbprint }
+            if ($existingCert) {
+                Write-Success "✓ Certificate already trusted in Windows certificate store"
+            } else {
+                $store.Add($cert)
+                Write-Success "✓ Certificate added to Windows certificate store"
+            }
+            $store.Close()
+            
+        } else {
+            Write-Warning "⚠ Not running as Administrator - cannot add to system certificate store"
+            Write-Host "To trust the certificate system-wide:"
+            Write-Host "1. Run PowerShell as Administrator"
+            Write-Host "2. Run: .\ddalab.ps1 trust-cert"
+        }
+        
+    } catch {
+        Write-Warning "⚠ Could not add certificate to Windows store: $($_.Exception.Message)"
+        Write-Host "Manual certificate import instructions:"
+        Write-Host "1. Open Certificate Manager (certmgr.msc)"
+        Write-Host "2. Navigate to Trusted Root Certification Authorities > Certificates"
+        Write-Host "3. Right-click > All Tasks > Import"
+        Write-Host "4. Select certs/cert.pem file"
+    }
+    
+    Write-Host ""
+    Write-Host "📋 Browser Trust Instructions:" -ForegroundColor Yellow
+    Write-Host "1. Visit https://localhost in your browser"
+    Write-Host "2. Click 'Advanced' → 'Proceed to localhost (unsafe)'"
+    Write-Host "3. The certificate will be trusted for this session"
+    Write-Host ""
 }
 
 function Start-Services {

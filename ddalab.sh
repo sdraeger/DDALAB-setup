@@ -93,6 +93,85 @@ setup_ssl() {
     fi
 }
 
+trust_certificate() {
+    if [ ! -f certs/cert.pem ]; then
+        echo -e "${RED}Error: Certificate not found${NC}"
+        return 1
+    fi
+
+    echo "Setting up certificate trust..."
+    
+    # Detect operating system
+    case "$(uname -s)" in
+        Darwin*)
+            echo "Detected macOS - Adding certificate to system keychain..."
+            # Check if certificate is already trusted
+            if security verify-cert -c certs/cert.pem &>/dev/null; then
+                echo -e "${GREEN}✓ Certificate already trusted${NC}"
+                return 0
+            fi
+            
+            # Add certificate to system keychain
+            if sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain certs/cert.pem 2>/dev/null; then
+                echo -e "${GREEN}✓ Certificate added to macOS keychain${NC}"
+            else
+                echo -e "${YELLOW}⚠ Could not add to system keychain (may need admin privileges)${NC}"
+                echo -e "${YELLOW}  Manual step: Trust the certificate when prompted in browser${NC}"
+            fi
+            ;;
+        Linux*)
+            echo "Detected Linux - Adding certificate to system trust store..."
+            
+            # Try different Linux certificate locations
+            if [ -d "/usr/local/share/ca-certificates" ]; then
+                # Debian/Ubuntu
+                if sudo cp certs/cert.pem /usr/local/share/ca-certificates/ddalab.crt 2>/dev/null && sudo update-ca-certificates &>/dev/null; then
+                    echo -e "${GREEN}✓ Certificate added to Linux trust store (Debian/Ubuntu)${NC}"
+                else
+                    echo -e "${YELLOW}⚠ Could not update system certificates (may need admin privileges)${NC}"
+                fi
+            elif [ -d "/etc/pki/ca-trust/source/anchors" ]; then
+                # RedHat/CentOS/Fedora
+                if sudo cp certs/cert.pem /etc/pki/ca-trust/source/anchors/ddalab.crt 2>/dev/null && sudo update-ca-trust &>/dev/null; then
+                    echo -e "${GREEN}✓ Certificate added to Linux trust store (RHEL/CentOS/Fedora)${NC}"
+                else
+                    echo -e "${YELLOW}⚠ Could not update system certificates (may need admin privileges)${NC}"
+                fi
+            else
+                echo -e "${YELLOW}⚠ Unknown Linux distribution - manual certificate trust required${NC}"
+            fi
+            ;;
+        MINGW*|MSYS*|CYGWIN*)
+            echo "Detected Windows (Git Bash/MSYS) - Adding certificate to Windows certificate store..."
+            
+            # Convert PEM to DER format for Windows
+            if openssl x509 -outform der -in certs/cert.pem -out certs/cert.der 2>/dev/null; then
+                # Try to add certificate to Windows store
+                if certlm.exe -add -c certs/cert.der -s -r localMachine root 2>/dev/null; then
+                    echo -e "${GREEN}✓ Certificate added to Windows certificate store${NC}"
+                    rm -f certs/cert.der
+                else
+                    echo -e "${YELLOW}⚠ Could not add to Windows certificate store (may need admin privileges)${NC}"
+                    echo -e "${YELLOW}  Manual step: Import certs/cert.pem into Trusted Root Certification Authorities${NC}"
+                    rm -f certs/cert.der
+                fi
+            else
+                echo -e "${YELLOW}⚠ Could not convert certificate format${NC}"
+            fi
+            ;;
+        *)
+            echo -e "${YELLOW}⚠ Unknown operating system - manual certificate trust required${NC}"
+            ;;
+    esac
+    
+    echo ""
+    echo -e "${YELLOW}📋 Browser Trust Instructions:${NC}"
+    echo "1. Visit https://localhost in your browser"
+    echo "2. Click 'Advanced' → 'Proceed to localhost (unsafe)'"
+    echo "3. The certificate will be trusted for this session"
+    echo ""
+}
+
 start_services() {
     echo "Starting DDALAB services..."
     
@@ -263,6 +342,7 @@ case "$1" in
         check_requirements
         setup_environment
         setup_ssl
+        trust_certificate
         start_services
         ;;
     stop)
@@ -286,17 +366,21 @@ case "$1" in
     backup)
         backup_data
         ;;
+    trust-cert)
+        trust_certificate
+        ;;
     *)
-        echo "Usage: $0 {start|stop|restart|update|logs|status|backup}"
+        echo "Usage: $0 {start|stop|restart|update|logs|status|backup|trust-cert}"
         echo ""
         echo "Commands:"
-        echo "  start    - Start DDALAB (sets up environment if needed)"
-        echo "  stop     - Stop DDALAB"
-        echo "  restart  - Restart DDALAB"
-        echo "  update   - Update DDALAB (git pull + rebuild Docker images)"
-        echo "  logs     - Show service logs (follow mode)"
-        echo "  status   - Show service status"
-        echo "  backup   - Create database backup"
+        echo "  start      - Start DDALAB (sets up environment if needed)"
+        echo "  stop       - Stop DDALAB"
+        echo "  restart    - Restart DDALAB"
+        echo "  update     - Update DDALAB (git pull + rebuild Docker images)"
+        echo "  logs       - Show service logs (follow mode)"
+        echo "  status     - Show service status"
+        echo "  backup     - Create database backup"
+        echo "  trust-cert - Trust SSL certificate on this system"
         exit 1
         ;;
 esac
