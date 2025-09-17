@@ -36,3 +36,8 @@ docker-volumes/
 *.tmp
 *.temp
 *.log
+
+dashboards/
+datasources/
+grafana/
+provisioning/

@@ -3,11 +3,13 @@
 ## Start DDALAB
 
 **Linux/macOS:**
+
 ```bash
 ./ddalab.sh start
 ```
 
 **Windows:**
+
 ```powershell
 .\ddalab.ps1 start
 ```
@@ -19,11 +21,13 @@
 ## Stop DDALAB
 
 **Linux/macOS:**
+
 ```bash
 ./ddalab.sh stop
 ```
 
 **Windows:**
+
 ```powershell
 .\ddalab.ps1 stop
 ```
